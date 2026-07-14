@@ -5,6 +5,15 @@ captures d'écran, mini-vidéos de Live Photos, regroupement en événements,
 puis export d'une arborescence propre avec **dates et GPS réinjectés dans
 l'EXIF** (sans quoi un ré-upload vers Google Photos détruirait la chronologie).
 
+## Usage local (recommandé)
+
+Le pipeline est autonome : aucun service externe, aucune IA requise à
+l'exécution. Sous Windows, installer [exiftool](https://exiftool.org) et
+[tesseract](https://github.com/UB-Mannheim/tesseract/wiki) et les mettre
+dans le PATH ; sous macOS : `brew install exiftool tesseract tesseract-lang`.
+Le reste : `pip install -r requirements.txt` (si `dlib-bin` n'a pas de
+wheel pour ta plateforme : `pip install dlib`, plus lent à compiler).
+
 ## Démarrage rapide
 
 ```bash
