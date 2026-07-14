@@ -13,10 +13,12 @@ python3 run_pipeline.py --source ... --out out --export           # après valid
 ```
 
 Test de non-régression : le pipeline sur les fixtures doit donner
-21 médias, 1 drop (doublon exact), 4 review (2 quasi-doublons, 1 screenshot,
-1 live_companion), 16 keep, 6 événements, 1 exception à l'export ;
-étape faces : 4 visages, 1 personne (3 photos ; le visage vu une seule
-fois est ignoré). Les portraits de test viennent du sdist PyPI de
+25 médias, 3 drop (1 doublon exact + 2 copies de dossier d'album),
+6 review (2 quasi-doublons, 1 screenshot, 1 live_companion, 2 photos
+ratées flou/sombre), 16 keep, 6 événements ; étape faces : 4 visages,
+1 personne (3 photos ; le visage vu une seule fois est ignoré) ;
+export : 1 exception, 1 album Takeout dans albums.json ("Vacances Rome",
+2 photos). Les portraits de test viennent du sdist PyPI de
 face_recognition (voir tests/make_fixtures.py) — réseau : seul PyPI est
 accessible depuis la VM, GitHub est limité à ce repo.
 
@@ -42,7 +44,13 @@ accessible depuis la VM, GitHub est limité à ce repo.
 ## Invariants à respecter
 
 1. **Jamais de suppression automatique** : le pipeline propose (`drop`/`review`),
-   l'humain dispose via le rapport. Seuls les doublons exacts sont `drop`.
+   l'humain dispose via le rapport (cases à cocher → decisions.json →
+   `--apply`). Seuls les doublons exacts sont `drop`.
+1bis. **Garde-fou albums** : une photo appartenant à un album (info fusionnée
+   depuis les dossiers d'albums Takeout) n'est jamais proposée à la
+   suppression — sa disparition casserait l'album, potentiellement partagé.
+   La qualité technique (netteté/luminosité) ne produit que des `review` :
+   une photo floue de soirée peut avoir du charme, seul l'humain en juge.
 2. **Jamais d'upload sans EXIF vérifié** : Google Photos date à l'upload toute
    photo sans `DateTimeOriginal` — c'est la chronologie de l'utilisateur qui
    est en jeu.

@@ -18,7 +18,7 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageEnhance
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 
 random.seed(42)
 
@@ -139,6 +139,24 @@ def main():
         name = f"IMG_26{i:02d}_{src.stem}.jpg"
         shutil.copy(src, d24 / name)
         sidecar(d24 / (name + ".json"), t2 + 86400 + i * 300, *paris)
+
+    # --- Dossier d'album Takeout : copie de IMG_2301 + quasi-doublon 2303 ---
+    alb = root / "Takeout" / "Google Photos" / "Vacances Rome"
+    alb.mkdir(parents=True, exist_ok=True)
+    (alb / "metadata.json").write_text(
+        json.dumps({"title": "Vacances Rome"}), encoding="utf-8")
+    shutil.copy(d23 / "IMG_2301.jpg", alb / "IMG_2301.jpg")
+    sidecar(alb / "IMG_2301.jpg.json", t0, *rome)
+    shutil.copy(d23 / "IMG_2303.jpg", alb / "IMG_2303.jpg")
+    sidecar(alb / "IMG_2303.jpg.json", t0 + 62, *rome)
+
+    # --- Photos "ratées" : une floue, une très sombre ---
+    photo(30).filter(ImageFilter.GaussianBlur(8)).save(
+        d24 / "IMG_2700_floue.jpg", quality=90)
+    sidecar(d24 / "IMG_2700_floue.jpg.json", t2 + 90000, *paris)
+    ImageEnhance.Brightness(photo(31)).enhance(0.08).save(
+        d24 / "IMG_2701_sombre.jpg", quality=90)
+    sidecar(d24 / "IMG_2701_sombre.jpg.json", t2 + 90060, *paris)
 
     n = sum(1 for _ in root.rglob("*") if _.is_file())
     print(f"Fixtures générées dans {root} ({n} fichiers)")

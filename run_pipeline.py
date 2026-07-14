@@ -22,6 +22,26 @@ def _faces(a):
     return faces.run(a.out)
 
 
+def apply_decisions(out_dir: str, decisions_file: str) -> dict:
+    """Applique un decisions.json exporté depuis le rapport interactif."""
+    from triage.db import connect
+    decisions = json.load(open(decisions_file, encoding="utf-8"))
+    con = connect(out_dir)
+    applied = {"drop": 0, "keep": 0, "inconnus": 0}
+    for path, choice in decisions.items():
+        if choice not in ("drop", "keep"):
+            continue
+        cur = con.execute(
+            "UPDATE media SET decision = ?, reason = ? WHERE path = ?",
+            (choice,
+             "confirmé par l'utilisateur" if choice == "drop"
+             else "repêché par l'utilisateur", path))
+        applied[choice if cur.rowcount else "inconnus"] += 1
+    con.commit()
+    con.close()
+    return applied
+
+
 STEPS = {
     "inventory": lambda a: inventory.run(a.source, a.out),
     "dedupe": lambda a: dedupe.run(a.out),
@@ -44,7 +64,15 @@ def main():
                         help="construit out/cleaned/ avec EXIF corrigé")
     parser.add_argument("--people", action="store_true",
                         help="construit out/albums_people/ (albums par personne)")
+    parser.add_argument("--apply", metavar="DECISIONS_JSON",
+                        help="applique les choix exportés du rapport, "
+                             "puis exécute les étapes demandées")
     args = parser.parse_args()
+
+    if args.apply:
+        print("--- application des décisions")
+        print(json.dumps(apply_decisions(args.out, args.apply),
+                         ensure_ascii=False, indent=2))
 
     for step in args.steps.split(","):
         step = step.strip()

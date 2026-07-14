@@ -22,7 +22,21 @@ NEAR_DISTANCE = 5  # distance de Hamming max pour un quasi-doublon
 def _quality_key(row) -> tuple:
     edited = "-edited" in row["filename"].lower()
     pixels = (row["width"] or 0) * (row["height"] or 0)
-    return (not edited, pixels, row["size"])
+    # dans une rafale, la netteté départage avant le poids du fichier
+    return (not edited, pixels, row["sharpness"] or 0, row["size"])
+
+
+def _exact_keeper(members) -> object:
+    """Copie de référence d'un doublon exact : la photothèque ('Photos from
+    YYYY') plutôt qu'une copie de dossier d'album, l'appartenance aux albums
+    étant reportée sur la copie gardée."""
+    return max(members, key=lambda m: (m["source_album"] is None,
+                                       _quality_key(m)))
+
+
+def _merge_albums(members) -> str | None:
+    albums = {a for m in members for a in (m["albums"] or "").split("|") if a}
+    return "|".join(sorted(albums)) or None
 
 
 def run(out_dir) -> dict:
@@ -39,21 +53,27 @@ def run(out_dir) -> dict:
         members = con.execute(
             "SELECT * FROM media WHERE sha256 = ? AND decision = 'keep'",
             (row["sha256"],)).fetchall()
-        keeper = max(members, key=_quality_key)
+        keeper = _exact_keeper(members)
+        con.execute("UPDATE media SET albums = ? WHERE path = ?",
+                    (_merge_albums(members), keeper["path"]))
         for m in members:
             con.execute("UPDATE media SET dup_group = ? WHERE path = ?",
                         (g, m["path"]))
             if m["path"] != keeper["path"]:
+                reason = (f"copie du dossier d'album « {m['source_album']} » "
+                          f"(appartenance reportée sur {keeper['filename']})"
+                          if m["source_album"]
+                          else f"doublon exact de {keeper['filename']}")
                 con.execute(
-                    """UPDATE media SET decision = 'drop',
-                       reason = ? WHERE path = ?""",
-                    (f"doublon exact de {keeper['filename']}", m["path"]))
+                    "UPDATE media SET decision = 'drop', reason = ? WHERE path = ?",
+                    (reason, m["path"]))
                 dropped += 1
         exact_groups += 1
 
     # --- quasi-doublons, par journée ---
     rows = con.execute(
-        """SELECT path, filename, phash, taken_ts, width, height, size
+        """SELECT path, filename, phash, taken_ts, width, height, size,
+                  sharpness
            FROM media WHERE decision = 'keep' AND phash IS NOT NULL
            ORDER BY taken_ts"""
     ).fetchall()

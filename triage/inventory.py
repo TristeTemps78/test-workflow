@@ -41,12 +41,38 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _phash(path: Path) -> str | None:
+def _image_stats(path: Path) -> tuple[str | None, float | None, float | None]:
+    """(phash, netteté, luminosité). Netteté = variance du laplacien sur une
+    version réduite (échelle comparable entre photos) ; luminosité 0-255."""
     try:
+        import numpy as np
         with Image.open(path) as im:
-            return str(imagehash.phash(im.convert("RGB")))
+            rgb = im.convert("RGB")
+            ph = str(imagehash.phash(rgb))
+            gray = rgb.convert("L")
+            gray.thumbnail((800, 800))
+            g = np.asarray(gray, dtype=np.float32)
+        if min(g.shape) < 3:
+            return ph, None, float(g.mean())
+        lap = (4 * g[1:-1, 1:-1] - g[:-2, 1:-1] - g[2:, 1:-1]
+               - g[1:-1, :-2] - g[1:-1, 2:])
+        return ph, float(lap.var()), float(g.mean())
     except Exception:
+        return None, None, None
+
+
+def _album_title(directory: Path) -> str | None:
+    """Nom d'album si le dossier est un album Takeout (et non 'Photos from YYYY')."""
+    if re.fullmatch(r"Photos from \d{4}", directory.name):
         return None
+    meta = directory / "metadata.json"
+    if not meta.exists():
+        return None
+    try:
+        return json.loads(meta.read_text(encoding="utf-8")).get("title") \
+            or directory.name
+    except Exception:
+        return directory.name
 
 
 def _exiftool_scan(source: Path) -> dict[str, dict]:
@@ -129,6 +155,7 @@ def run(source: str | Path, out_dir: str | Path) -> dict:
 
     seen = skipped = 0
     for directory in sorted({p.parent for p in source.rglob("*") if p.is_file()}):
+        album = _album_title(directory)
         json_names = {p.name for p in directory.iterdir()
                       if p.suffix.lower() == ".json"}
         for path in sorted(directory.iterdir()):
@@ -159,15 +186,18 @@ def run(source: str | Path, out_dir: str | Path) -> dict:
                      or int(stat.st_mtime))
             camera = " ".join(x for x in (meta.get("Make"), meta.get("Model")) if x) or None
 
+            phash, sharp, bright = (_image_stats(path) if kind == "image"
+                                    else (None, None, None))
             con.execute(
                 """INSERT OR REPLACE INTO media
                    (path, filename, dirname, ext, kind, size, mtime, sha256,
-                    phash, width, height, exif_dt, camera, duration, json_path,
+                    phash, sharpness, brightness, source_album, albums,
+                    width, height, exif_dt, camera, duration, json_path,
                     json_ts, gps_lat, gps_lon, description, taken_ts, category)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (str(path), path.name, str(directory), ext, kind,
                  stat.st_size, stat.st_mtime, _sha256(path),
-                 _phash(path) if kind == "image" else None,
+                 phash, sharp, bright, album, album,
                  meta.get("ImageWidth"), meta.get("ImageHeight"),
                  exif_dt, camera, meta.get("Duration"),
                  sidecar.get("json_path"), sidecar.get("json_ts"),

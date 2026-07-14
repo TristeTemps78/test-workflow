@@ -10,6 +10,7 @@
 Les originaux de l'export Takeout ne sont jamais modifiés.
 """
 
+import json
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -47,6 +48,7 @@ def run(out_dir) -> dict:
     exif_written = 0
     exceptions: list[str] = []
     argfile_lines: list[str] = []
+    album_map: dict[str, list[str]] = {}
 
     for row in rows:
         event_dir = cleaned / (row["event"] or "sans-date")
@@ -59,6 +61,10 @@ def run(out_dir) -> dict:
             n += 1
         shutil.copy2(row["path"], dest)
         copied += 1
+        for album in (row["albums"] or "").split("|"):
+            if album:
+                album_map.setdefault(album, []).append(
+                    str(dest.relative_to(cleaned)))
 
         # l'EXIF n'est réécrit que si le JSON Takeout apporte une info
         if row["kind"] == "image":
@@ -82,6 +88,12 @@ def run(out_dir) -> dict:
         (Path(out_dir) / "exceptions.txt").write_text(
             "\n".join(exceptions), encoding="utf-8")
 
+    # appartenance aux albums Google Photos d'origine, pour recréation rclone
+    if album_map:
+        (Path(out_dir) / "albums.json").write_text(
+            json.dumps(album_map, ensure_ascii=False, indent=1),
+            encoding="utf-8")
+
     con.close()
     return {"copiés": copied, "exif_réécrits": exif_written,
-            "exceptions": len(exceptions)}
+            "albums_takeout": len(album_map), "exceptions": len(exceptions)}

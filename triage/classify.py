@@ -17,7 +17,14 @@ from .db import connect
 
 SCREENSHOT_RE = re.compile(r"(?i)(screen[_ ]?shot|screenshot|capture)")
 EVENT_GAP_SECONDS = 8 * 3600
-LIVE_MAX_DURATION = 7  # secondes
+LIVE_MAX_DURATION = 7   # secondes
+
+# Qualité technique. Volontairement prudents : une photo "ratée" n'est
+# JAMAIS supprimée d'office (les photos de soirée floues ont leur charme),
+# c'est une proposition à valider dans le rapport, avec son contexte.
+BLUR_THRESHOLD = 40     # variance du laplacien en dessous = probablement floue
+DARK_THRESHOLD = 35     # luminosité moyenne (0-255)
+BRIGHT_THRESHOLD = 225
 
 
 def run(out_dir) -> dict:
@@ -61,6 +68,40 @@ def run(out_dir) -> dict:
                  im["path"]))
             shots += 1
 
+    # --- photos ratées (flou / exposition) : proposition, jamais d'office ---
+    low_quality = 0
+    for im in con.execute(
+            """SELECT * FROM media WHERE kind = 'image' AND decision = 'keep'
+               AND category = 'photo'""").fetchall():
+        problems = []
+        if im["sharpness"] is not None and im["sharpness"] < BLUR_THRESHOLD:
+            problems.append("floue")
+        if im["brightness"] is not None:
+            if im["brightness"] < DARK_THRESHOLD:
+                problems.append("très sombre")
+            elif im["brightness"] > BRIGHT_THRESHOLD:
+                problems.append("surexposée")
+        if problems:
+            con.execute(
+                """UPDATE media SET category = 'low_quality',
+                   decision = 'review', reason = ? WHERE path = ?""",
+                ("photo probablement ratée : " + ", ".join(problems),
+                 im["path"]))
+            low_quality += 1
+
+    # --- garde-fou albums : une photo d'un album n'est jamais proposée
+    #     à la suppression (sa disparition casserait l'album, partagé ou non).
+    #     Exception : les copies de dossier d'album dont l'original est gardé.
+    protected = 0
+    for im in con.execute(
+            """SELECT * FROM media WHERE decision = 'review'
+               AND albums IS NOT NULL AND albums != ''""").fetchall():
+        con.execute(
+            """UPDATE media SET decision = 'keep', reason = ? WHERE path = ?""",
+            (f"protégée : présente dans l'album « {im['albums']} » "
+             f"(proposition initiale : {im['reason']})", im["path"]))
+        protected += 1
+
     # --- événements ---
     rows = con.execute(
         "SELECT path, taken_ts FROM media WHERE decision = 'keep' ORDER BY taken_ts"
@@ -92,4 +133,6 @@ def run(out_dir) -> dict:
 
     con.commit()
     con.close()
-    return {"live_companions": live, "screenshots": shots, "événements": events}
+    return {"live_companions": live, "screenshots": shots,
+            "photos_ratées": low_quality, "protégées_par_album": protected,
+            "événements": events}

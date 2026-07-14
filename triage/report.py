@@ -41,6 +41,12 @@ figcaption { word-break: break-all; margin-top: .2rem; }
 .keep { outline: 3px solid #2e7d32; } .tag { font-weight: 600; }
 .keep-tag { color: #2e7d32; } .drop-tag { color: #c62828; }
 .muted { color: #666; }
+.badge { background: #fff3cd; color: #7a5c00; border-radius: 4px;
+         padding: 0 .3rem; font-weight: 600; }
+#exportbar { position: sticky; bottom: 0; background: inherit;
+             padding: .6rem 0; border-top: 1px solid #ccc; }
+button { padding: .4rem .9rem; border-radius: 6px; border: 1px solid #888;
+         cursor: pointer; }
 @media (prefers-color-scheme: dark) {
   body { background: #16161a; color: #eee; }
   td, th { border-color: #444; } .group { border-color: #3a3a3a; }
@@ -68,9 +74,21 @@ def _figure(row, keeper: bool) -> str:
                 ("SUPPRIMER" if row["decision"] == "drop" else "À VALIDER") +
                 "</span>")
     date = datetime.fromtimestamp(row["taken_ts"], tz=timezone.utc).strftime("%d/%m/%Y")
+    extras = []
+    if row["albums"]:
+        extras.append(f'<span class="badge">📁 {html.escape(row["albums"])}</span>')
+    if row["reason"]:
+        extras.append(f'<span class="muted">{html.escape(row["reason"])}</span>')
+    checkbox = ""
+    if row["decision"] == "review":
+        checkbox = (f'<label><input type="checkbox" class="decision" checked '
+                    f'data-path="{html.escape(row["path"], quote=True)}"> '
+                    f"supprimer</label>")
     return (f'<figure><img class="{"keep" if keeper else ""}" src="{_thumb(row)}">'
             f"<figcaption>{tag} {html.escape(row['filename'])}"
             f'<br><span class="muted">{date} · {row["size"] // 1024} Ko</span>'
+            f"{'<br>' + '<br>'.join(extras) if extras else ''}"
+            f"{'<br>' + checkbox if checkbox else ''}"
             f"</figcaption></figure>")
 
 
@@ -181,10 +199,39 @@ def run(out_dir) -> dict:
 {_flat_section(con, "live_companion", "Mini-vidéos de Live Photos",
                "Takeout sépare les Live Photos en photo + vidéo de 2 s. "
                "La photo est conservée ; ces vidéos pollueraient la galerie.")}
+{_flat_section(con, "low_quality", "Photos probablement ratées (flou, exposition)",
+               "Détection purement technique — une photo d'ambiance floue peut "
+               "valoir de l'or : décoche celles qui ont leur charme. Les photos "
+               "appartenant à un album sont automatiquement protégées.")}
 {_people_section(con)}
 <h2>Événements proposés ({len(events)})</h2>
 <p class="muted">Un événement = un dossier dans l'export propre (= un album si ré-upload par API).</p>
 <table><tr><th>Événement</th><th>Photos</th></tr>{event_rows}</table>
+<div id="exportbar">
+<button onclick="exportDecisions()">Exporter mes choix (decisions.json)</button>
+<button onclick="copyDecisions()">Copier dans le presse-papier</button>
+<span id="status" class="muted"></span>
+</div>
+<script>
+function collect() {{
+  const d = {{}};
+  document.querySelectorAll("input.decision").forEach(cb => {{
+    d[cb.dataset.path] = cb.checked ? "drop" : "keep";
+  }});
+  return JSON.stringify(d, null, 1);
+}}
+function exportDecisions() {{
+  const blob = new Blob([collect()], {{type: "application/json"}});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "decisions.json";
+  a.click();
+}}
+function copyDecisions() {{
+  navigator.clipboard.writeText(collect()).then(() =>
+    document.getElementById("status").textContent = " copié !");
+}}
+</script>
 """
     out = Path(out_dir) / "report.html"
     out.write_text(body, encoding="utf-8")
