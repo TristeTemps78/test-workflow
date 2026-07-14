@@ -12,11 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image
-from pillow_heif import register_heif_opener
 
 from .db import connect
 
-register_heif_opener()
+try:  # pas de wheel win_arm64 : sans pillow-heif, les HEIC ne sont pas lus
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
 
 THUMB = 140
 

@@ -18,9 +18,21 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 random.seed(42)
+
+
+def load_font(size: int) -> ImageFont.FreeTypeFont:
+    """Première police grasse disponible (Linux, macOS, Windows)."""
+    for name in ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                 "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+                 "arialbd.ttf", "DejaVuSans-Bold.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            continue
+    raise OSError("aucune police TrueType trouvée")
 
 
 def fetch_face_photos() -> list[Path]:
@@ -108,8 +120,7 @@ def main():
     sdraw = ImageDraw.Draw(shot)
     sdraw.rectangle([0, 0, 1080, 120], fill=(60, 60, 70))
     try:
-        sfont = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 34)
+        sfont = load_font(34)
         sdraw.text((60, 300), "Paul : tu as vu le message du proprio ?",
                    fill=(30, 30, 30), font=sfont)
         sdraw.text((60, 380), "Moi : oui mdr il a repondu a la mauvaise",
@@ -161,14 +172,11 @@ def main():
         shutil.copy(faces["obama_partial_face"], d24 / "IMG-20240320-WA0007.jpg")
         sidecar(d24 / "IMG-20240320-WA0007.jpg.json", t2 + 87000)
 
-    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-
     # --- Document photographié : page blanche pleine de texte ---
     try:
-        from PIL import ImageFont
         doc = Image.new("RGB", (900, 1100), (250, 250, 246))
         draw = ImageDraw.Draw(doc)
-        font = ImageFont.truetype(font_path, 26)
+        font = load_font(26)
         lines = ["ATTESTATION DE LOCATION", "",
                  "Je soussigné Jean Dupont, propriétaire du logement",
                  "situé 12 rue des Lilas, atteste que Monsieur Martin",
@@ -186,7 +194,7 @@ def main():
         # --- Mème : photo + texte incrusté, pas de données d'appareil ---
         meme = photo(40, size=(800, 600))
         mdraw = ImageDraw.Draw(meme)
-        mfont = ImageFont.truetype(font_path, 48)
+        mfont = load_font(48)
         mdraw.text((40, 20), "QUAND LE CODE MARCHE", fill="white", font=mfont,
                    stroke_width=3, stroke_fill="black")
         mdraw.text((100, 520), "DU PREMIER COUP", fill="white", font=mfont,

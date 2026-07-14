@@ -18,11 +18,14 @@ from pathlib import Path
 
 import imagehash
 from PIL import Image
-from pillow_heif import register_heif_opener
 
 from .db import connect
 
-register_heif_opener()
+try:  # pas de wheel win_arm64 : sans pillow-heif, les HEIC ne sont pas lus
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".gif",
               ".bmp", ".tif", ".tiff"}
@@ -81,7 +84,10 @@ def _exiftool_scan(source: Path) -> dict[str, dict]:
            "-DateTimeOriginal", "-CreateDate", "-Make", "-Model",
            "-ImageWidth", "-ImageHeight", "-Duration", "-MIMEType",
            str(source)]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    # exiftool sort de l'UTF-8 ; sans encoding explicite, Windows décode
+    # en cp1252 et le scan entier part en UnicodeDecodeError
+    res = subprocess.run(cmd, capture_output=True, text=True,
+                         encoding="utf-8", errors="replace")
     try:
         entries = json.loads(res.stdout or "[]")
     except json.JSONDecodeError:

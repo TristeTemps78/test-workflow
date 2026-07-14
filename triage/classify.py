@@ -44,7 +44,8 @@ def _ocr(path: str) -> str:
     try:
         res = subprocess.run(
             ["tesseract", path, "stdout", "-l", "fra+eng", "--psm", "3"],
-            capture_output=True, text=True, timeout=30)
+            capture_output=True, text=True, timeout=30,
+            encoding="utf-8", errors="replace")
         return " ".join(res.stdout.split())
     except Exception:
         return ""

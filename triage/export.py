@@ -80,7 +80,8 @@ def run(out_dir) -> dict:
         argfile = Path(out_dir) / "exiftool.args"
         argfile.write_text("\n".join(argfile_lines), encoding="utf-8")
         res = subprocess.run(["exiftool", "-@", str(argfile)],
-                             capture_output=True, text=True)
+                             capture_output=True, text=True,
+                             encoding="utf-8", errors="replace")
         if res.returncode != 0:
             exceptions.append(f"exiftool a signalé des erreurs : {res.stderr[-500:]}")
 
