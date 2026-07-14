@@ -21,11 +21,14 @@ import dlib
 import face_recognition
 import numpy as np
 from PIL import Image
-from pillow_heif import register_heif_opener
 
 from .db import connect
 
-register_heif_opener()
+try:  # pas de wheel win_arm64 : sans pillow-heif, les HEIC ne sont pas lus
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
 
 CLUSTER_THRESHOLD = 0.5   # distance max entre deux visages d'une même personne
 MAX_PIXELS = 1600         # les grandes photos sont réduites avant détection
