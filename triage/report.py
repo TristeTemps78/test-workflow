@@ -87,6 +87,57 @@ def _groups_section(con, column: str, title: str, blurb: str) -> str:
     return "\n".join(parts)
 
 
+def _face_crop(row) -> str | None:
+    try:
+        with Image.open(row["path"]) as im:
+            im = im.convert("RGB")
+            pad = (row["bottom"] - row["top"]) // 3
+            box = (max(row["left"] - pad, 0), max(row["top"] - pad, 0),
+                   min(row["right"] + pad, im.width),
+                   min(row["bottom"] + pad, im.height))
+            crop = im.crop(box)
+            crop.thumbnail((100, 100))
+            buf = io.BytesIO()
+            crop.save(buf, "JPEG", quality=70)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return None
+
+
+def _people_section(con) -> str:
+    try:
+        clusters = con.execute(
+            """SELECT cluster, COUNT(DISTINCT path) photos FROM faces
+               WHERE cluster IS NOT NULL GROUP BY cluster
+               ORDER BY photos DESC""").fetchall()
+    except Exception:  # étape faces jamais exécutée
+        return ""
+    parts = [f"<h2>Personnes détectées ({len(clusters)})</h2>",
+             "<p class='muted'>Visages regroupés automatiquement (analyse "
+             "100 % locale). Pour nommer : créer out/people_names.json, "
+             'ex. {"person-01": "Maman"}, puis relancer avec --people.</p>']
+    if not clusters:
+        parts.append("<p>Aucune (étape `faces` non exécutée ou aucun visage "
+                     "récurrent).</p>")
+    for c in clusters:
+        rows = con.execute(
+            """SELECT f.*, m.filename FROM faces f
+               JOIN media m ON m.path = f.path
+               WHERE f.cluster = ? LIMIT 8""", (c["cluster"],)).fetchall()
+        figs = []
+        for r in rows:
+            src = _face_crop(r)
+            if src:
+                figs.append(f'<figure><img src="{src}">'
+                            f"<figcaption class='muted'>"
+                            f"{html.escape(r['filename'])}</figcaption></figure>")
+        parts.append(
+            f'<div class="group"><figure><figcaption class="tag">'
+            f'{html.escape(c["cluster"])}<br>{c["photos"]} photo(s)'
+            f"</figcaption></figure>{''.join(figs)}</div>")
+    return "\n".join(parts)
+
+
 def _flat_section(con, category: str, title: str, blurb: str) -> str:
     rows = con.execute("SELECT * FROM media WHERE category = ?", (category,)).fetchall()
     parts = [f"<h2>{title} ({len(rows)})</h2><p class='muted'>{blurb}</p>"]
@@ -130,6 +181,7 @@ def run(out_dir) -> dict:
 {_flat_section(con, "live_companion", "Mini-vidéos de Live Photos",
                "Takeout sépare les Live Photos en photo + vidéo de 2 s. "
                "La photo est conservée ; ces vidéos pollueraient la galerie.")}
+{_people_section(con)}
 <h2>Événements proposés ({len(events)})</h2>
 <p class="muted">Un événement = un dossier dans l'export propre (= un album si ré-upload par API).</p>
 <table><tr><th>Événement</th><th>Photos</th></tr>{event_rows}</table>

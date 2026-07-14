@@ -13,8 +13,12 @@ python3 run_pipeline.py --source ... --out out --export           # après valid
 ```
 
 Test de non-régression : le pipeline sur les fixtures doit donner
-17 médias, 1 drop (doublon exact), 4 review (2 quasi-doublons, 1 screenshot,
-1 live_companion), 12 keep, 5 événements, 1 exception à l'export.
+21 médias, 1 drop (doublon exact), 4 review (2 quasi-doublons, 1 screenshot,
+1 live_companion), 16 keep, 6 événements, 1 exception à l'export ;
+étape faces : 4 visages, 1 personne (3 photos ; le visage vu une seule
+fois est ignoré). Les portraits de test viennent du sdist PyPI de
+face_recognition (voir tests/make_fixtures.py) — réseau : seul PyPI est
+accessible depuis la VM, GitHub est limité à ce repo.
 
 ## Architecture
 
@@ -30,6 +34,10 @@ Test de non-régression : le pipeline sur les fixtures doit donner
   Ne modifie JAMAIS les originaux. Toute photo sans date fiable va dans
   `out/exceptions.txt`, jamais exportée silencieusement.
 - `triage/report.py` — rapport HTML autonome (miniatures base64).
+- `triage/faces.py` — visages : détection + empreintes (face_recognition),
+  clustering chinese-whispers (dlib), albums par personne. 100 % local,
+  aucune photo n'est envoyée à un service externe — invariant à conserver.
+  Nommage des personnes : `out/people_names.json`.
 
 ## Invariants à respecter
 

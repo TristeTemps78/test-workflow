@@ -26,8 +26,10 @@ passer en `--source`. Le manifeste (`out/manifest.db`) rend le pipeline
 | `inventory` | scan, appariement photo↔JSON Takeout (noms tronqués, `(1)`, `-edited`, `.supplemental-metadata`), EXIF, SHA-256, hash perceptuel |
 | `dedupe` | doublons exacts → `drop` ; quasi-doublons du même jour → `review` |
 | `classify` | screenshots, compagnons de Live Photos, découpage en événements |
+| `faces` | détection de visages + clustering local (dlib) → personnes `person-01`, `person-02`, … |
 | `report` | rapport HTML autonome avec miniatures — le point de validation humain |
 | `--export` | copie les `keep` dans `out/cleaned/<événement>/` + fusion JSON→EXIF via exiftool ; les cas douteux partent dans `out/exceptions.txt` |
+| `--people` | albums par personne dans `out/albums_people/<nom>/` ; noms via `out/people_names.json` (`{"person-01": "Maman"}`, `""` = ignorer) |
 
 ## Décisions
 

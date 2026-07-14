@@ -11,12 +11,37 @@ Usage : python3 tests/make_fixtures.py [dossier_cible=tests/fixtures]
 
 import json
 import random
+import shutil
+import subprocess
 import sys
+import tarfile
+import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance
 
 random.seed(42)
+
+
+def fetch_face_photos() -> list[Path]:
+    """Photos de test avec de vrais visages, tirées du sdist PyPI de
+    face_recognition (2 personnes). Retourne [] si le réseau ne permet pas."""
+    try:
+        tmp = Path(tempfile.mkdtemp())
+        subprocess.run(
+            ["pip3", "download", "--no-binary", ":all:", "--no-deps",
+             "-q", "-d", str(tmp), "face_recognition"],
+            check=True, capture_output=True, timeout=120)
+        archive = next(tmp.glob("face_recognition-*.tar.gz"))
+        with tarfile.open(archive) as tar:
+            tar.extractall(tmp, filter="data")
+        images = sorted(next(tmp.glob("*/tests/test_images")).glob("*.jpg"))
+        return [p for p in images
+                if p.name in {"obama.jpg", "obama2.jpg", "obama3.jpg",
+                              "biden.jpg"}]
+    except Exception as exc:
+        print(f"(visages de test indisponibles : {exc})")
+        return []
 
 
 def photo(seed: int, size=(640, 480)) -> Image.Image:
@@ -108,6 +133,12 @@ def main():
         name = f"IMG_25{i:02d}.jpg"
         photo(seed).save(d24 / name, quality=90)
         sidecar(d24 / (name + ".json"), t2 + i * 600)
+
+    # --- Portraits réels (2 personnes) pour le clustering de visages ---
+    for i, src in enumerate(fetch_face_photos()):
+        name = f"IMG_26{i:02d}_{src.stem}.jpg"
+        shutil.copy(src, d24 / name)
+        sidecar(d24 / (name + ".json"), t2 + 86400 + i * 300, *paris)
 
     n = sum(1 for _ in root.rglob("*") if _.is_file())
     print(f"Fixtures générées dans {root} ({n} fichiers)")

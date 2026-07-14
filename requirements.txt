@@ -1,3 +1,10 @@
 Pillow>=10.0
 imagehash>=4.3
 pillow-heif>=0.16
+
+# Reconnaissance faciale (albums par personne) — analyse 100 % locale.
+# Si le build de face_recognition_models échoue (AttributeError install_layout) :
+#   SETUPTOOLS_USE_DISTUTILS=stdlib pip install --no-build-isolation face_recognition_models
+dlib-bin>=19.24
+face_recognition>=1.3
+face_recognition_models>=0.3

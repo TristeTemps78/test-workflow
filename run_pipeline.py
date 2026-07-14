@@ -16,10 +16,17 @@ import json
 
 from triage import classify, dedupe, export, inventory, report
 
+
+def _faces(a):
+    from triage import faces  # import paresseux : dlib est lourd
+    return faces.run(a.out)
+
+
 STEPS = {
     "inventory": lambda a: inventory.run(a.source, a.out),
     "dedupe": lambda a: dedupe.run(a.out),
     "classify": lambda a: classify.run(a.out),
+    "faces": _faces,
     "report": lambda a: report.run(a.out),
 }
 
@@ -30,10 +37,13 @@ def main():
                         help="dossier de l'export Takeout extrait")
     parser.add_argument("--out", default="out",
                         help="dossier de travail (manifeste, rapport, export)")
-    parser.add_argument("--steps", default="inventory,dedupe,classify,report",
+    parser.add_argument("--steps",
+                        default="inventory,dedupe,classify,faces,report",
                         help="étapes à exécuter, séparées par des virgules")
     parser.add_argument("--export", action="store_true",
                         help="construit out/cleaned/ avec EXIF corrigé")
+    parser.add_argument("--people", action="store_true",
+                        help="construit out/albums_people/ (albums par personne)")
     args = parser.parse_args()
 
     for step in args.steps.split(","):
@@ -46,6 +56,12 @@ def main():
     if args.export:
         print("--- export")
         print(json.dumps(export.run(args.out), ensure_ascii=False, indent=2))
+
+    if args.people:
+        from triage import faces
+        print("--- albums par personne")
+        print(json.dumps(faces.export_albums(args.out),
+                         ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
