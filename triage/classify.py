@@ -1,4 +1,5 @@
-"""Classification : screenshots, compagnons de Live Photos, événements.
+"""Classification : screenshots, compagnons de Live Photos, contenu
+(documents, mèmes, photos reçues via messagerie), qualité, événements.
 
 - Screenshot : nom de fichier explicite, ou PNG sans EXIF appareil photo
   -> proposition `review` (suppression suggérée, à valider).
@@ -11,11 +12,22 @@
 """
 
 import re
+import subprocess
 from datetime import datetime, timezone
 
 from .db import connect
 
 SCREENSHOT_RE = re.compile(r"(?i)(screen[_ ]?shot|screenshot|capture)")
+
+# Fichiers arrivés par messagerie / réseaux sociaux, pas pris par l'utilisateur.
+# IMG-20240101-WA0007.jpg = WhatsApp ; FB_IMG_, received_, Snapchat-...
+RECEIVED_RE = re.compile(
+    r"(?i)^(IMG|VID)-\d{8}-WA\d+|^FB_IMG_|^received_|^Snapchat-|^unnamed(\(\d+\))?\.")
+
+# OCR : au-delà de ce nombre de mots, une image est probablement un document.
+DOC_MIN_WORDS = 40
+# Entre MEME_MIN et DOC_MIN mots sur une image sans EXIF appareil : mème probable.
+MEME_MIN_WORDS = 4
 EVENT_GAP_SECONDS = 8 * 3600
 LIVE_MAX_DURATION = 7   # secondes
 
@@ -25,6 +37,21 @@ LIVE_MAX_DURATION = 7   # secondes
 BLUR_THRESHOLD = 40     # variance du laplacien en dessous = probablement floue
 DARK_THRESHOLD = 35     # luminosité moyenne (0-255)
 BRIGHT_THRESHOLD = 225
+
+
+def _ocr(path: str) -> str:
+    """Texte lu dans l'image (français + anglais), '' si rien/échec."""
+    try:
+        res = subprocess.run(
+            ["tesseract", path, "stdout", "-l", "fra+eng", "--psm", "3"],
+            capture_output=True, text=True, timeout=30)
+        return " ".join(res.stdout.split())
+    except Exception:
+        return ""
+
+
+def _word_count(text: str) -> int:
+    return sum(1 for w in text.split() if len(w) >= 3 and any(c.isalpha() for c in w))
 
 
 def run(out_dir) -> dict:
@@ -67,6 +94,49 @@ def run(out_dir) -> dict:
                  else "capture d'écran probable (PNG sans appareil photo)",
                  im["path"]))
             shots += 1
+
+    # --- contenu : reçues via messagerie, documents, mèmes ---
+    # OCR ciblé pour rester rapide : screenshots (extrait affiché dans le
+    # rapport), images sans EXIF appareil (candidates mème/document) et
+    # photos d'appareil très claires (candidates document papier).
+    received = docs = memes = 0
+    for im in con.execute(
+            """SELECT * FROM media WHERE kind = 'image'
+               AND decision IN ('keep', 'review')""").fetchall():
+        if RECEIVED_RE.match(im["filename"]) and im["decision"] == "keep":
+            con.execute(
+                """UPDATE media SET category = 'received', decision = 'review',
+                   reason = ? WHERE path = ?""",
+                ("reçue via messagerie (WhatsApp/réseaux sociaux), "
+                 "pas prise par toi", im["path"]))
+            received += 1
+            continue
+
+        is_screenshot = im["category"] == "screenshot"
+        no_camera = not im["camera"]
+        bright_camera = (im["camera"] and im["brightness"]
+                         and im["brightness"] > 170)
+        if not (is_screenshot or no_camera or bright_camera):
+            continue
+        text = im["ocr_text"] if im["ocr_text"] is not None else _ocr(im["path"])
+        con.execute("UPDATE media SET ocr_text = ? WHERE path = ?",
+                    (text, im["path"]))
+        if is_screenshot or im["decision"] != "keep":
+            continue
+        words = _word_count(text)
+        if words >= DOC_MIN_WORDS:
+            con.execute(
+                """UPDATE media SET category = 'document', decision = 'review',
+                   reason = ? WHERE path = ?""",
+                (f"document ({words} mots lus)", im["path"]))
+            docs += 1
+        elif no_camera and words >= MEME_MIN_WORDS:
+            con.execute(
+                """UPDATE media SET category = 'meme', decision = 'review',
+                   reason = ? WHERE path = ?""",
+                (f"mème probable (texte incrusté, aucune donnée d'appareil photo)",
+                 im["path"]))
+            memes += 1
 
     # --- photos ratées (flou / exposition) : proposition, jamais d'office ---
     low_quality = 0
@@ -134,5 +204,6 @@ def run(out_dir) -> dict:
     con.commit()
     con.close()
     return {"live_companions": live, "screenshots": shots,
+            "reçues_messagerie": received, "documents": docs, "mèmes": memes,
             "photos_ratées": low_quality, "protégées_par_album": protected,
             "événements": events}

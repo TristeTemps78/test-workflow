@@ -53,6 +53,7 @@ MIGRATIONS = [
     "ALTER TABLE media ADD COLUMN brightness REAL",
     "ALTER TABLE media ADD COLUMN source_album TEXT",
     "ALTER TABLE media ADD COLUMN albums TEXT",
+    "ALTER TABLE media ADD COLUMN ocr_text TEXT",
 ]
 
 

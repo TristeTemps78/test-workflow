@@ -59,9 +59,12 @@ def run(out_dir) -> dict:
     con = connect(out_dir)
     con.executescript(FACES_SCHEMA)
 
+    # Les photos reçues (review) sont scannées aussi : le croisement
+    # visages connus/inconnus fait partie de la proposition.
     rows = con.execute(
         """SELECT path FROM media
-           WHERE decision = 'keep' AND kind = 'image'
+           WHERE kind = 'image'
+             AND (decision = 'keep' OR category = 'received')
              AND category NOT IN ('screenshot')
              AND path NOT IN (SELECT path FROM face_scan)"""
     ).fetchall()
@@ -104,6 +107,23 @@ def run(out_dir) -> dict:
             con.execute("UPDATE faces SET cluster = ? WHERE id = ?",
                         (names.get(lab), face["id"]))
         clusters = len(names)
+
+    # Croisement avec les photos reçues par messagerie : des visages qui ne
+    # correspondent à aucune personne récurrente de la photothèque renforcent
+    # la proposition (famille éloignée / inconnus) ; l'inverse la nuance.
+    for im in con.execute(
+            "SELECT * FROM media WHERE category = 'received'").fetchall():
+        face_clusters = [r["cluster"] for r in con.execute(
+            "SELECT cluster FROM faces WHERE path = ?", (im["path"],))]
+        if not face_clusters:
+            continue
+        known = sorted({c for c in face_clusters if c})
+        note = (f"contient {', '.join(known)} — à vérifier avant suppression"
+                if known else
+                "visages inconnus (aucune personne récurrente de ta photothèque)")
+        if note not in (im["reason"] or ""):
+            con.execute("UPDATE media SET reason = ? WHERE path = ?",
+                        (f"{im['reason']} ; {note}", im["path"]))
     con.commit()
     con.close()
     return {"photos_scannées": scanned, "visages": found,

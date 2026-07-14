@@ -6,21 +6,23 @@ l'usage. Ce fichier donne le contexte aux sessions Claude Code.
 ## Commandes
 
 ```bash
-pip install -r requirements.txt && apt-get install -y libimage-exiftool-perl
+pip install -r requirements.txt
+apt-get install -y libimage-exiftool-perl tesseract-ocr tesseract-ocr-fra
 python3 tests/make_fixtures.py                                   # jeu d'essai
 python3 run_pipeline.py --source tests/fixtures/Takeout --out out  # pipeline complet
 python3 run_pipeline.py --source ... --out out --export           # après validation
 ```
 
 Test de non-régression : le pipeline sur les fixtures doit donner
-25 médias, 3 drop (1 doublon exact + 2 copies de dossier d'album),
-6 review (2 quasi-doublons, 1 screenshot, 1 live_companion, 2 photos
-ratées flou/sombre), 16 keep, 6 événements ; étape faces : 4 visages,
-1 personne (3 photos ; le visage vu une seule fois est ignoré) ;
-export : 1 exception, 1 album Takeout dans albums.json ("Vacances Rome",
-2 photos). Les portraits de test viennent du sdist PyPI de
-face_recognition (voir tests/make_fixtures.py) — réseau : seul PyPI est
-accessible depuis la VM, GitHub est limité à ce repo.
+28 médias, 3 drop (1 doublon exact + 2 copies de dossier d'album),
+9 review (2 quasi-doublons, 1 screenshot, 1 live_companion, 2 photos
+ratées flou/sombre, 1 reçue WhatsApp, 1 document, 1 mème), 16 keep,
+6 événements ; étape faces : 5 visages, 1 personne, et la photo WhatsApp
+doit être enrichie de « contient person-01 » ; export : 1 exception,
+1 album Takeout dans albums.json ("Vacances Rome", 2 photos).
+Les portraits de test viennent du sdist PyPI de face_recognition
+(voir tests/make_fixtures.py) — réseau : seul PyPI est accessible
+depuis la VM, GitHub est limité à ce repo.
 
 ## Architecture
 
@@ -30,8 +32,11 @@ accessible depuis la VM, GitHub est limité à ce repo.
   `match_sidecar` concentre les cas tordus de nommage : ne pas la simplifier
   sans faire tourner les fixtures.
 - `triage/dedupe.py` — SHA-256 (exact) puis phash par journée (quasi-doublons).
-- `triage/classify.py` — screenshots, compagnons Live Photos, événements
-  (rupture temporelle > 8 h).
+- `triage/classify.py` — screenshots, compagnons Live Photos, contenu
+  (reçues messagerie par nom de fichier WA/FB, documents et mèmes par OCR
+  tesseract fra+eng), qualité (flou/exposition), événements (rupture
+  temporelle > 8 h). L'OCR est ciblé (screenshots, images sans EXIF
+  appareil, photos très claires) pour rester rapide sur de gros volumes.
 - `triage/export.py` — copies propres + fusion JSON→EXIF (exiftool).
   Ne modifie JAMAIS les originaux. Toute photo sans date fiable va dans
   `out/exceptions.txt`, jamais exportée silencieusement.

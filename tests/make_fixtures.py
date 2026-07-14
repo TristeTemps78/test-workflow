@@ -38,7 +38,7 @@ def fetch_face_photos() -> list[Path]:
         images = sorted(next(tmp.glob("*/tests/test_images")).glob("*.jpg"))
         return [p for p in images
                 if p.name in {"obama.jpg", "obama2.jpg", "obama3.jpg",
-                              "biden.jpg"}]
+                              "biden.jpg", "obama_partial_face.jpg"}]
     except Exception as exc:
         print(f"(visages de test indisponibles : {exc})")
         return []
@@ -102,9 +102,22 @@ def main():
     (d23 / "IMG_2306.MP4").write_bytes(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 2048)
     sidecar(d23 / "IMG_2306.jpg.json", t0 + 7200, *rome)
 
-    # --- Screenshot (hors événement, le lendemain) ---
+    # --- Screenshot avec du texte (extrait OCR affiché dans le rapport) ---
+    from PIL import ImageFont
     shot = Image.new("RGB", (1080, 2400), (245, 245, 250))
-    ImageDraw.Draw(shot).rectangle([0, 0, 1080, 120], fill=(60, 60, 70))
+    sdraw = ImageDraw.Draw(shot)
+    sdraw.rectangle([0, 0, 1080, 120], fill=(60, 60, 70))
+    try:
+        sfont = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 34)
+        sdraw.text((60, 300), "Paul : tu as vu le message du proprio ?",
+                   fill=(30, 30, 30), font=sfont)
+        sdraw.text((60, 380), "Moi : oui mdr il a repondu a la mauvaise",
+                   fill=(30, 30, 30), font=sfont)
+        sdraw.text((60, 460), "personne, je suis mort de rire",
+                   fill=(30, 30, 30), font=sfont)
+    except OSError:
+        pass
     shot.save(d23 / "Screenshot_20230611-101532.png")
     sidecar(d23 / "Screenshot_20230611-101532.png.json", t0 + 86400)
 
@@ -135,10 +148,55 @@ def main():
         sidecar(d24 / (name + ".json"), t2 + i * 600)
 
     # --- Portraits réels (2 personnes) pour le clustering de visages ---
-    for i, src in enumerate(fetch_face_photos()):
-        name = f"IMG_26{i:02d}_{src.stem}.jpg"
+    faces = {p.stem: p for p in fetch_face_photos()}
+    for i, (stem, src) in enumerate(sorted(faces.items())):
+        if stem == "obama_partial_face":
+            continue  # réservé à la photo "reçue via WhatsApp" ci-dessous
+        name = f"IMG_26{i:02d}_{stem}.jpg"
         shutil.copy(src, d24 / name)
         sidecar(d24 / (name + ".json"), t2 + 86400 + i * 300, *paris)
+
+    # --- Reçue via WhatsApp (nom WA + personne connue dessus) ---
+    if "obama_partial_face" in faces:
+        shutil.copy(faces["obama_partial_face"], d24 / "IMG-20240320-WA0007.jpg")
+        sidecar(d24 / "IMG-20240320-WA0007.jpg.json", t2 + 87000)
+
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+    # --- Document photographié : page blanche pleine de texte ---
+    try:
+        from PIL import ImageFont
+        doc = Image.new("RGB", (900, 1100), (250, 250, 246))
+        draw = ImageDraw.Draw(doc)
+        font = ImageFont.truetype(font_path, 26)
+        lines = ["ATTESTATION DE LOCATION", "",
+                 "Je soussigné Jean Dupont, propriétaire du logement",
+                 "situé 12 rue des Lilas, atteste que Monsieur Martin",
+                 "occupe ce logement depuis le premier janvier deux",
+                 "mille vingt-trois en qualité de locataire principal.",
+                 "Le loyer mensuel est de sept cents euros charges",
+                 "comprises, payable le cinq de chaque mois.",
+                 "Fait pour servir et valoir ce que de droit.",
+                 "Signature du propriétaire : Jean Dupont"]
+        for i, line in enumerate(lines):
+            draw.text((60, 60 + i * 48), line, fill=(20, 20, 20), font=font)
+        doc.save(d24 / "IMG_2800_document.jpg", quality=92)
+        sidecar(d24 / "IMG_2800_document.jpg.json", t2 + 88000)
+
+        # --- Mème : photo + texte incrusté, pas de données d'appareil ---
+        meme = photo(40, size=(800, 600))
+        mdraw = ImageDraw.Draw(meme)
+        mfont = ImageFont.truetype(font_path, 48)
+        mdraw.text((40, 20), "QUAND LE CODE MARCHE", fill="white", font=mfont,
+                   stroke_width=3, stroke_fill="black")
+        mdraw.text((100, 520), "DU PREMIER COUP", fill="white", font=mfont,
+                   stroke_width=3, stroke_fill="black")
+        # nom neutre : teste la détection par contenu (texte incrusté sans
+        # EXIF appareil), pas la détection par nom de fichier
+        meme.save(d24 / "meme_chat_lundi.jpg", quality=88)
+        sidecar(d24 / "meme_chat_lundi.jpg.json", t2 + 89000)
+    except OSError:
+        print("(police DejaVu absente : fixtures document/mème sautées)")
 
     # --- Dossier d'album Takeout : copie de IMG_2301 + quasi-doublon 2303 ---
     alb = root / "Takeout" / "Google Photos" / "Vacances Rome"

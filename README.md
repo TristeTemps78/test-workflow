@@ -8,7 +8,8 @@ l'EXIF** (sans quoi un ré-upload vers Google Photos détruirait la chronologie)
 ## Démarrage rapide
 
 ```bash
-pip install -r requirements.txt          # + exiftool (apt install libimage-exiftool-perl)
+pip install -r requirements.txt
+apt install libimage-exiftool-perl tesseract-ocr tesseract-ocr-fra
 python3 tests/make_fixtures.py           # jeu d'essai synthétique
 python3 run_pipeline.py --source tests/fixtures/Takeout --out out
 # ouvrir out/report.html, valider, puis :
@@ -25,7 +26,7 @@ passer en `--source`. Le manifeste (`out/manifest.db`) rend le pipeline
 |---|---|
 | `inventory` | scan, appariement photo↔JSON Takeout (noms tronqués, `(1)`, `-edited`, `.supplemental-metadata`), dossiers d'albums, EXIF, SHA-256, hash perceptuel, scores netteté/luminosité |
 | `dedupe` | doublons exacts → `drop` (copies de dossiers d'albums fusionnées, appartenance conservée) ; quasi-doublons du même jour → `review`, la plus nette gardée |
-| `classify` | screenshots, compagnons de Live Photos, photos ratées (flou/exposition, `review` uniquement), garde-fou albums (jamais de suppression proposée sur une photo d'album), découpage en événements |
+| `classify` | screenshots (avec extrait OCR du texte affiché), photos reçues via messagerie (WhatsApp/FB), documents photographiés et mèmes (OCR tesseract), compagnons de Live Photos, photos ratées (flou/exposition), garde-fou albums, découpage en événements — tout en `review`, rien de supprimé d'office |
 | `faces` | détection de visages + clustering local (dlib) → personnes `person-01`, `person-02`, … |
 | `report` | rapport HTML interactif : cases à cocher sur chaque proposition, bouton d'export `decisions.json` |
 | `--apply decisions.json` | applique les choix faits dans le rapport au manifeste |

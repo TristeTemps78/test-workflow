@@ -43,6 +43,7 @@ figcaption { word-break: break-all; margin-top: .2rem; }
 .muted { color: #666; }
 .badge { background: #fff3cd; color: #7a5c00; border-radius: 4px;
          padding: 0 .3rem; font-weight: 600; }
+.ocr { color: #1a5276; font-style: italic; }
 #exportbar { position: sticky; bottom: 0; background: inherit;
              padding: .6rem 0; border-top: 1px solid #ccc; }
 button { padding: .4rem .9rem; border-radius: 6px; border: 1px solid #888;
@@ -79,6 +80,9 @@ def _figure(row, keeper: bool) -> str:
         extras.append(f'<span class="badge">📁 {html.escape(row["albums"])}</span>')
     if row["reason"]:
         extras.append(f'<span class="muted">{html.escape(row["reason"])}</span>')
+    if row["ocr_text"]:
+        snippet = " ".join(row["ocr_text"].split()[:14])
+        extras.append(f'<span class="ocr">« {html.escape(snippet)}… »</span>')
     checkbox = ""
     if row["decision"] == "review":
         checkbox = (f'<label><input type="checkbox" class="decision" checked '
@@ -195,7 +199,18 @@ def run(out_dir) -> dict:
 {_groups_section(con, "near_group", "Quasi-doublons (rafales, retouches)",
                  "Images visuellement quasi identiques prises le même jour. À toi de confirmer.")}
 {_flat_section(con, "screenshot", "Captures d'écran",
-               "Suppression suggérée — vérifie qu'aucune ne contient d'info à garder.")}
+               "Suppression suggérée — le texte lu (en italique) t'aide à repérer "
+               "les discussions marrantes ou infos à garder : décoche-les.")}
+{_flat_section(con, "received", "Reçues via messagerie (WhatsApp, réseaux sociaux)",
+               "Enregistrées automatiquement dans la galerie, pas prises par toi. "
+               "Le croisement visages t'indique si une personne récurrente de ta "
+               "photothèque y figure.")}
+{_flat_section(con, "document", "Documents photographiés",
+               "Beaucoup de texte détecté : tickets, papiers, tableaux blancs. "
+               "Vérifie qu'aucun document n'est encore utile avant suppression.")}
+{_flat_section(con, "meme", "Mèmes probables",
+               "Texte incrusté sans données d'appareil photo : images "
+               "téléchargées/transférées plutôt que prises.")}
 {_flat_section(con, "live_companion", "Mini-vidéos de Live Photos",
                "Takeout sépare les Live Photos en photo + vidéo de 2 s. "
                "La photo est conservée ; ces vidéos pollueraient la galerie.")}
