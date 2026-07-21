@@ -1,0 +1,56 @@
+# CI standard multi-agents (codex_transition_kit).
+# A copier en .github/workflows/ci.yml dans un repo SANS CI.
+# 2 jobs : scan de secrets (bloquant) + tests auto-detectes (informatif au depart).
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  secret-scan:
+    name: Scan de secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Comptes perso : aucune licence requise (gitleaks-action est gratuit hors organisation).
+
+  tests:
+    name: Tests (auto-detectes)
+    runs-on: ubuntu-latest
+    # Informatif tant que l'environnement CI du repo n'est pas cable (deps systeme, fixtures...).
+    # Passer a false pour rendre les tests bloquants une fois le repo pret.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Detecter et lancer les tests
+        shell: bash
+        run: |
+          set -e
+          if [ -f package.json ] && grep -q '"test"' package.json; then
+            if [ -f pnpm-lock.yaml ]; then corepack enable; pnpm install --frozen-lockfile || pnpm install; pnpm test;
+            else npm ci 2>/dev/null || npm install; npm test; fi
+          elif ls tests/*.test.mjs >/dev/null 2>&1; then
+            node --test tests/*.test.mjs
+          elif [ -f Cargo.toml ]; then
+            cargo test
+          elif [ -f requirements.txt ] || ls tests/test_*.py >/dev/null 2>&1; then
+            python -m pip install -U pip
+            if [ -f requirements.txt ]; then pip install -r requirements.txt || true; fi
+            pip install pytest
+            pytest -q
+          else
+            echo "Aucun test detecte (rien a lancer)."
+          fi
