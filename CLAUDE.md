@@ -2,6 +2,8 @@
 
 Pipeline de tri d'un export Google Photos (Takeout). Voir `README.md` pour
 l'usage. Ce fichier donne le contexte aux sessions Claude Code.
+L'avancement et les priorités sont dans `ROADMAP.md` — le consulter en
+début de session et le mettre à jour (cases + journal) en fin de tâche.
 
 ## Commandes
 
