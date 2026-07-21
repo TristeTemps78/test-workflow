@@ -1,0 +1,45 @@
+# Flux de revue par PR - a copier en .github/workflows/pr-review.yml
+# dans les repos qui adoptent le flux branche -> PR -> revue (opt-in).
+# NE PAS mettre sur les repos mono-branche (ex. dragon-overlay).
+#
+# 2 jobs :
+#   - checks   : garde-fous deterministes (secrets + tests best-effort) sur la PR.
+#   - claude   : revue automatique par Claude Code, ACTIVEE seulement si la variable de repo
+#                PR_REVIEW_CLAUDE == 'true' ET le secret ANTHROPIC_API_KEY est present.
+#                /!\ Cette option consomme l'API Anthropic (FACTUREE, distincte des abonnements).
+name: PR review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  checks:
+    name: Garde-fous PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan de secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  claude:
+    name: Revue Claude (optionnelle, facturee)
+    if: ${{ vars.PR_REVIEW_CLAUDE == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Revue de code par Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          direct_prompt: |
+            Relis cette pull request comme un relecteur exigeant (le redacteur n'est jamais le relecteur).
+            Cherche : bugs de correction, regressions, secrets/oublis, et occasions de simplification.
+            Poste tes remarques en commentaires de PR. Sois concis, priorise le plus grave.
