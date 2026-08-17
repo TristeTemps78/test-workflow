@@ -26,6 +26,9 @@ Les invariants de `CLAUDE.md` priment sur tout ce qui est listé ici.
       Puis `face_recognition` + `face_recognition_models`, et validation du
       test de non-régression faces : 5 visages, 1 personne, photo WhatsApp
       enrichie de « contient person-01 ».
+- [ ] 🔒 @hermes — **Diagnostic optique pédagogique minimal** : enrichir les
+      alertes qualité existantes avec observations, hypothèses prudentes et
+      conseils déterministes, sans IA ni nouvelle dépendance (2026-08-17).
 
 ## À faire (par priorité)
 
